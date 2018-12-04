@@ -5,8 +5,10 @@ import cfg
 
 def quad_loss(y_true, y_pred):
     # loss for inside_score
-    logits = y_pred[:, :, :, :1]
-    labels = y_true[:, :, :, :1]
+    logits = y_pred[:, :, :, :4]
+    labels = y_true[:, :, :, :4]
+
+    '''
     # balance positive and negative samples in an image
     beta = 1 - tf.reduce_mean(labels)
     # first apply sigmoid activation
@@ -15,34 +17,67 @@ def quad_loss(y_true, y_pred):
     inside_score_loss = tf.reduce_mean(
         -1 * (beta * labels * tf.log(predicts + cfg.epsilon) +
               (1 - beta) * (1 - labels) * tf.log(1 - predicts + cfg.epsilon)))
+    '''
+    #calculate weight for each class
+    class_weights = 1 - tf.reduce_mean(labels, axis=0)
+
+    # your class weights
+    #class_weights = tf.constant([[1.0, 2.0, 3.0]])
+
+
+    # deduce weights for batch samples based on their true label
+    sample_weights = tf.reduce_sum(class_weights * labels, axis=1)
+
+
+    # compute your (unweighted) softmax cross entropy loss
+    unweighted_losses = tf.nn.softmax_cross_entropy_with_logits(
+        labels = labels, logits= logits)
+
+    # apply the weights, relying on broadcasting of the multiplication
+    weighted_losses = unweighted_losses * sample_weights
+
+    # reduce the result to get your final loss
+    inside_score_loss = tf.reduce_mean(weighted_losses)
+
     inside_score_loss *= cfg.lambda_inside_score_loss
 
+
+
     # loss for side_vertex_code
-    vertex_logits = y_pred[:, :, :, 1:3]
-    vertex_labels = y_true[:, :, :, 1:3]
-    vertex_beta = 1 - (tf.reduce_mean(y_true[:, :, :, 1:2])
-                       / (tf.reduce_mean(labels) + cfg.epsilon))
+    vertex_logits = y_pred[:, :, :, 4:6]
+    vertex_labels = y_true[:, :, :, 4:6]
+
+    positive_weights = tf.cast(tf.not_equal(y_true[:, :, :, 0], 1),
+                               tf.float32)
+
+    vertex_beta = 1 - (tf.reduce_mean(y_true[:, :, :, 4:5])
+                       / (tf.reduce_mean(positive_weights) + cfg.epsilon))
+
     vertex_predicts = tf.nn.sigmoid(vertex_logits)
+
     pos = -1 * vertex_beta * vertex_labels * tf.log(vertex_predicts +
                                                     cfg.epsilon)
+
     neg = -1 * (1 - vertex_beta) * (1 - vertex_labels) * tf.log(
         1 - vertex_predicts + cfg.epsilon)
-    positive_weights = tf.cast(tf.equal(y_true[:, :, :, 0], 1), tf.float32)
+
     side_vertex_code_loss = \
         tf.reduce_sum(tf.reduce_sum(pos + neg, axis=-1) * positive_weights) / (
                 tf.reduce_sum(positive_weights) + cfg.epsilon)
     side_vertex_code_loss *= cfg.lambda_side_vertex_code_loss
 
+
+
     # loss for side_vertex_coord delta
-    g_hat = y_pred[:, :, :, 3:]
-    g_true = y_true[:, :, :, 3:]
-    vertex_weights = tf.cast(tf.equal(y_true[:, :, :, 1], 1), tf.float32)
+    g_hat = y_pred[:, :, :, 6:]
+    g_true = y_true[:, :, :, 6:]
+    vertex_weights = tf.cast(tf.equal(y_true[:, :, :, 4], 1), tf.float32)
     pixel_wise_smooth_l1norm = smooth_l1_loss(g_hat, g_true, vertex_weights)
     side_vertex_coord_loss = tf.reduce_sum(pixel_wise_smooth_l1norm) / (
             tf.reduce_sum(vertex_weights) + cfg.epsilon)
     side_vertex_coord_loss *= cfg.lambda_side_vertex_coord_loss
-    return inside_score_loss + side_vertex_code_loss + side_vertex_coord_loss
-
+    #return inside_score_loss + side_vertex_code_loss + side_vertex_coord_loss
+    return side_vertex_code_loss + side_vertex_coord_loss
 
 def smooth_l1_loss(prediction_tensor, target_tensor, weights):
     n_q = tf.reshape(quad_norm(target_tensor), tf.shape(weights))

@@ -11,7 +11,7 @@ def gen(batch_size=cfg.batch_size, is_val=False):
     x = np.zeros((batch_size, img_h, img_w, cfg.num_channels), dtype=np.float32)
     pixel_num_h = img_h // cfg.pixel_size
     pixel_num_w = img_w // cfg.pixel_size
-    y = np.zeros((batch_size, pixel_num_h, pixel_num_w, 7), dtype=np.float32)
+    y = np.zeros((batch_size, pixel_num_h, pixel_num_w, 10), dtype=np.float32)
     if is_val:
         with open(os.path.join(cfg.data_dir, cfg.val_fname), 'r') as f_val:
             f_list = f_val.readlines()

@@ -116,17 +116,26 @@ def preprocess():
             # draw on the img
             draw = ImageDraw.Draw(show_gt_im)
             with open(os.path.join(origin_txt_dir,
-                                   o_img_fname[:-4] + '.txt'), 'r') as f:
+                                   'object_'+ o_img_fname[:-4]), 'r') as f:
                 anno_list = f.readlines()
-            xy_list_array = np.zeros((len(anno_list), 4, 2))
+            xy_list_array = np.zeros((len(anno_list), 5, 2))
             for anno, i in zip(anno_list, range(len(anno_list))):
+                category, anno = anno.strip().split('\t')
                 anno_colums = anno.strip().split(',')
                 anno_array = np.array(anno_colums)
                 xy_list = np.reshape(anno_array[:8].astype(float), (4, 2))
                 xy_list[:, 0] = xy_list[:, 0] * scale_ratio_w
                 xy_list[:, 1] = xy_list[:, 1] * scale_ratio_h
                 xy_list = reorder_vertexes(xy_list)
-                xy_list_array[i] = xy_list
+                # set the class label, needed one-hot encoding
+                if category == 'circle':
+                    xy_list_array[i] = np.r_[xy_list, np.array([[0, 1]])]
+                elif category == 'rect':
+                    xy_list_array[i] = np.r_[xy_list, np.array([[1, 0]])]
+                else:
+                    xy_list_array[i] = np.r_[xy_list, np.array([[1, 1]])]
+
+                #xy_list_array[i] = xy_list
                 _, shrink_xy_list, _ = shrink(xy_list, cfg.shrink_ratio)
                 shrink_1, _, long_edge = shrink(xy_list, cfg.shrink_side_ratio)
                 if draw_gt_quad:

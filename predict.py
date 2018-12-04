@@ -1,10 +1,9 @@
 import argparse
-
 import numpy as np
 from PIL import Image, ImageDraw
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
-
+from keras.activations import sigmoid,softmax
 import cfg
 from label import point_inside_of_quad
 from network import East
@@ -12,9 +11,9 @@ from preprocess import resize_image
 from nms import nms
 
 
-def sigmoid(x):
-    """`y = 1 / (1 + exp(-x))`"""
-    return 1 / (1 + np.exp(-x))
+#def sigmoid(x):
+ #   """`y = 1 / (1 + exp(-x))`"""
+#    return 1 / (1 + np.exp(-x))
 
 
 def cut_text_line(geo, scale_ratio_w, scale_ratio_h, im_array, img_path, s):
@@ -42,10 +41,19 @@ def predict(east_detect, img_path, pixel_threshold, quiet=False):
     y = east_detect.predict(x)
 
     y = np.squeeze(y, axis=0)
-    y[:, :, :3] = sigmoid(y[:, :, :3])
-    cond = np.greater_equal(y[:, :, 0], pixel_threshold)
+
+    y[:, :, :4] = softmax(y[:, :, :4])
+    y[:, :, 4:6] = sigmoid(y[:, :, 4:6])
+
+    #generate mask for filtering background
+    cond = np.not_equal(np.argmax(y[:, :, :3]),0)
+    #cond = np.greater_equal(y[:, :, 0], pixel_threshold)
+
+
     activation_pixels = np.where(cond)
     quad_scores, quad_after_nms = nms(y, activation_pixels)
+
+
     with Image.open(img_path) as im:
         im_array = image.img_to_array(im.convert('RGB'))
         d_wight, d_height = resize_image(im, cfg.max_predict_img_size)
@@ -105,9 +113,11 @@ def predict_txt(east_detect, img_path, txt_path, pixel_threshold, quiet=False):
     img = preprocess_input(img, mode='tf')
     x = np.expand_dims(img, axis=0)
     y = east_detect.predict(x)
-
     y = np.squeeze(y, axis=0)
-    y[:, :, :3] = sigmoid(y[:, :, :3])
+    #activate the output layer
+    y[:, :, :4] = softmax(y[:, :, :4])
+    y[:, :, 4:6] = sigmoid(y[:, :, 4:6])
+    #
     cond = np.greater_equal(y[:, :, 0], pixel_threshold)
     activation_pixels = np.where(cond)
     quad_scores, quad_after_nms = nms(y, activation_pixels)
@@ -138,12 +148,12 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    img_path = args.path
-    threshold = float(args.threshold)
-    print(img_path, threshold)
-
+    #args = parse_args()
+    #img_path = args.path
+    #threshold = float(args.threshold)
+    #print(img_path, threshold)
+    img_path = r'C:\Users\LSC-110\Desktop\training_data\hsa00010.png'
     east = East()
     east_detect = east.east_network()
     east_detect.load_weights(cfg.saved_model_weights_file_path)
-    predict(east_detect, img_path, threshold)
+    predict(east_detect, img_path, cfg.pixel_threshold,quiet=True)

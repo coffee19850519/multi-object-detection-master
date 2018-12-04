@@ -52,6 +52,8 @@ def rec_region_merge(region_list, m, S):
 
 def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
     region_list = []
+
+
     for i, j in zip(activation_pixels[0], activation_pixels[1]):
         merge = False
         for k in range(len(region_list)):
@@ -62,6 +64,8 @@ def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
                 # break
         if not merge:
             region_list.append({(i, j)})
+
+
     D = region_group(region_list)
     quad_list = np.zeros((len(D), 4, 2))
     score_list = np.zeros((len(D), 4))
@@ -69,16 +73,20 @@ def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
         total_score = np.zeros((4, 2))
         for row in group:
             for ij in region_list[row]:
-                score = predict[ij[0], ij[1], 1]
+
+                score = predict[ij[0], ij[1], 4]
+
                 if score >= threshold:
-                    ith_score = predict[ij[0], ij[1], 2:3]
+                    ith_score = predict[ij[0], ij[1], 5:6]
                     if not (cfg.trunc_threshold <= ith_score < 1 -
                             cfg.trunc_threshold):
                         ith = int(np.around(ith_score))
+
                         total_score[ith * 2:(ith + 1) * 2] += score
+
                         px = (ij[1] + 0.5) * cfg.pixel_size
                         py = (ij[0] + 0.5) * cfg.pixel_size
-                        p_v = [px, py] + np.reshape(predict[ij[0], ij[1], 3:7],
+                        p_v = [px, py] + np.reshape(predict[ij[0], ij[1], 6:10],
                                               (2, 2))
                         quad_list[g_th, ith * 2:(ith + 1) * 2] += score * p_v
         score_list[g_th] = total_score[:, 0]

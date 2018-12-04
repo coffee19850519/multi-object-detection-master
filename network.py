@@ -63,7 +63,7 @@ class East:
 
     def east_network(self):
         before_output = self.gradually_merge(cfg.feature_layers_num)
-        inside_score = Conv2D(1, 1, padding='same', name='inside_score'
+        inside_score = Conv2D(4, 1, padding='same', name='inside_score'
                               )(before_output)
         side_v_code = Conv2D(2, 1, padding='same', name='side_vertex_code'
                              )(before_output)

@@ -102,11 +102,16 @@ def process_label(data_dir=cfg.data_dir):
     with open(os.path.join(data_dir, cfg.train_fname), 'r') as f_train:
         f_list.extend(f_train.readlines())
     for line, _ in zip(f_list, tqdm(range(len(f_list)))):
+        #category,line = str(line).strip().split('\t')
         line_cols = str(line).strip().split(',')
         img_name, width, height = \
             line_cols[0].strip(), int(line_cols[1].strip()), \
             int(line_cols[2].strip())
-        gt = np.zeros((height // cfg.pixel_size, width // cfg.pixel_size, 7))
+
+        gt = np.zeros((height // cfg.pixel_size, width // cfg.pixel_size, 10))
+        #set background label as default
+        gt[:, :, 0:1] = 1
+
         train_label_dir = os.path.join(data_dir, cfg.train_label_dir_name)
         xy_list_array = np.load(os.path.join(train_label_dir,
                                              img_name[:-4] + '.npy'))
@@ -114,8 +119,9 @@ def process_label(data_dir=cfg.data_dir):
         with Image.open(os.path.join(train_image_dir, img_name)) as im:
             draw = ImageDraw.Draw(im)
             for xy_list in xy_list_array:
-                _, shrink_xy_list, _ = shrink(xy_list, cfg.shrink_ratio)
-                shrink_1, _, long_edge = shrink(xy_list, cfg.shrink_side_ratio)
+                xy_list_coords = xy_list[:4, :]
+                _, shrink_xy_list, _ = shrink(xy_list_coords, cfg.shrink_ratio)
+                shrink_1, _, long_edge = shrink(xy_list_coords, cfg.shrink_side_ratio)
                 p_min = np.amin(shrink_xy_list, axis=0)
                 p_max = np.amax(shrink_xy_list, axis=0)
                 # floor of the float
@@ -132,24 +138,31 @@ def process_label(data_dir=cfg.data_dir):
                         py = (i + 0.5) * cfg.pixel_size
                         if point_inside_of_quad(px, py,
                                                 shrink_xy_list, p_min, p_max):
-                            gt[i, j, 0] = 1
+                            #set the class label, needed one-hot encoding
+                            if (xy_list[4] == np.array([0.0, 1.0])).all():
+                                gt[i, j, 0:4] = [0, 1, 0, 0]
+                            elif (xy_list[4] == np.array([1.0, 0.0])).all():
+                                gt[i, j, 0:4] = [0, 0, 1, 0]
+                            elif (xy_list[4] == np.array([1.0, 1.0])).all():
+                                gt[i, j, 0:4] = [0, 0, 0, 1]
+
                             line_width, line_color = 1, 'red'
                             ith = point_inside_of_nth_quad(px, py,
-                                                           xy_list,
+                                                           xy_list_coords,
                                                            shrink_1,
                                                            long_edge)
                             vs = [[[3, 0], [1, 2]], [[0, 1], [2, 3]]]
                             if ith in range(2):
-                                gt[i, j, 1] = 1
+                                gt[i, j, 4] = 1
                                 if ith == 0:
                                     line_width, line_color = 2, 'yellow'
                                 else:
                                     line_width, line_color = 2, 'green'
-                                gt[i, j, 2:3] = ith
-                                gt[i, j, 3:5] = \
-                                    xy_list[vs[long_edge][ith][0]] - [px, py]
-                                gt[i, j, 5:] = \
-                                    xy_list[vs[long_edge][ith][1]] - [px, py]
+                                gt[i, j, 5:6] = ith
+                                gt[i, j, 6:8] = \
+                                    xy_list_coords[vs[long_edge][ith][0]] - [px, py]
+                                gt[i, j, 8:] = \
+                                    xy_list_coords[vs[long_edge][ith][1]] - [px, py]
                             draw.line([(px - 0.5 * cfg.pixel_size,
                                         py - 0.5 * cfg.pixel_size),
                                        (px + 0.5 * cfg.pixel_size,
